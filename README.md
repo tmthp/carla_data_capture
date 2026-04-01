@@ -71,7 +71,7 @@ python3 carla_capture.py
 Chạy manual/autopilot:
 
 ```bash
-python3 carla_capture.py --map Town04 --filter vehicle.audi.etron --weather HardRainSunset --res 1920x1080 --sync --hz 100
+python3 carla_capture.py --map Town04 --filter vehicle.tesla.model3 --weather ClearNoon --res 1920x1080 --sync --hz 100
 ```
 
 Chạy theo kịch bản:

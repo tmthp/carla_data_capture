@@ -200,7 +200,7 @@ throttle,brake,steer,gear
 - `time`: thời gian mô phỏng tính từ lúc bắt đầu ghi.
 - `image_file`: tên file ảnh tương ứng trong `images/`.
 - `x, y, z`: vị trí xe.
-- `roll, pitch, yaw`: góc quay lấy từ transform của actor IMU gắn gần vị trí đầu người lái.
-- `rollRate, pitchRate, yawRate`: vận tốc góc lấy từ gyroscope của IMU.
+- `roll, pitch, yaw`: góc quay lấy từ transform của actor IMU gắn gần vị trí đầu người lái, được lưu dưới đơn vị `rad`.
+- `rollRate, pitchRate, yawRate`: vận tốc góc lấy từ gyroscope của IMU, được lưu dưới đơn vị `rad/s`.
 - `ax, ay, az`: gia tốc lấy từ accelerometer của IMU.
 - `throttle, brake, steer, gear`: lệnh điều khiển xe tại thời điểm ghi.

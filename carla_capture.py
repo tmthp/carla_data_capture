@@ -121,13 +121,16 @@ class DataWriter:
         img_name = f"frame_{frame_id:06d}.png"
         cv2.imwrite(os.path.join(self.images_path, img_name), img_bgr)
         loc = transform.location
+        roll_rad = math.radians(imu["roll"])
+        pitch_rad = math.radians(imu["pitch"])
+        yaw_rad = math.radians(imu["yaw"])
         self._writer.writerow({
             "frame_id":   frame_id,
             "time":       f"{time_elapsed:.6f}",
             "image_file": img_name,
             "x":        f"{loc.x:.6f}", "y": f"{loc.y:.6f}", "z": f"{loc.z:.6f}",
-            "roll":     f"{imu['roll']:.6f}", "pitch": f"{imu['pitch']:.6f}",
-            "yaw":      f"{imu['yaw']:.6f}",
+            "roll":     f"{roll_rad:.6f}", "pitch": f"{pitch_rad:.6f}",
+            "yaw":      f"{yaw_rad:.6f}",
             "rollRate":  f"{imu['rollRate']:.6f}",
             "pitchRate": f"{imu['pitchRate']:.6f}",
             "yawRate":   f"{imu['yawRate']:.6f}",

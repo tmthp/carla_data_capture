@@ -75,12 +75,12 @@ def draw_hud(frame: np.ndarray, row: pd.Series,
              frame_idx: int, total: int) -> np.ndarray:
     """Vẽ bảng thông số xe lên góc phải dưới của frame."""
     h, w = frame.shape[:2]
-    roll_rad = math.radians(row.roll)
-    pitch_rad = math.radians(row.pitch)
-    yaw_rad = math.radians(row.yaw)
-    roll_rate_rad = math.radians(row.rollRate)
-    pitch_rate_rad = math.radians(row.pitchRate)
-    yaw_rate_rad = math.radians(row.yawRate)
+    roll_rad = row.roll
+    pitch_rad = row.pitch
+    yaw_rad = row.yaw
+    roll_rate_rad = row.rollRate
+    pitch_rate_rad = row.pitchRate
+    yaw_rate_rad = row.yawRate
 
     # Vị trí góc trên-trái của HUD
     hud_x = w - HUD_W - HUD_MARGIN

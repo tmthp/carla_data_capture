@@ -1,7 +1,7 @@
 """
 carla_replay.py
 ───────────────
-Tạo video replay từ dữ liệu thu được bởi carla_capture.py.
+Tạo video replay từ dữ liệu thu được bởi carla_capture.py (Bản cập nhật).
 
 Yêu cầu:
     pip install opencv-python numpy pandas
@@ -25,12 +25,12 @@ import pandas as pd
 
 
 # ─────────────────────────── Cấu hình HUD ────────────────────────────────────
-HUD_W          = 340          # chiều rộng bảng HUD (px)
-HUD_H          = 420          # chiều cao bảng HUD (px)
-HUD_MARGIN     = 16           # cách góc khung hình
-HUD_ALPHA      = 0.72         # độ trong suốt nền HUD (0=trong, 1=đặc)
-HUD_BG_COLOR   = (10, 10, 10) # BGR nền HUD
-HUD_BORDER_CLR = (0, 200, 80) # màu viền xanh lá
+HUD_W          = 360          # Nới rộng bảng HUD để chứa text dài hơn
+HUD_H          = 440          # Chiều cao HUD sau khi bỏ nhóm vận tốc thành phần
+HUD_MARGIN     = 16           
+HUD_ALPHA      = 0.72         
+HUD_BG_COLOR   = (10, 10, 10) 
+HUD_BORDER_CLR = (0, 200, 80) 
 HUD_TITLE_CLR  = (0, 220, 110)
 HUD_VALUE_CLR  = (220, 220, 220)
 HUD_UNIT_CLR   = (130, 180, 130)
@@ -52,13 +52,21 @@ def load_session(data_dir: str) -> pd.DataFrame:
     csv_path = os.path.join(data_dir, "data.csv")
     if not os.path.isfile(csv_path):
         sys.exit(f"[ERROR] Không tìm thấy file CSV: {csv_path}")
+    
     df = pd.read_csv(csv_path)
+    
+    # Nội suy vận tốc để tính tốc độ tổng hiển thị ở tiêu đề HUD
+    dt = df['time'].diff()
+    df['vx'] = (df['x'].diff() / dt).fillna(0.0)
+    df['vy'] = (df['y'].diff() / dt).fillna(0.0)
+    df['vz'] = (df['z'].diff() / dt).fillna(0.0)
+
     print(f"[INFO] Đã tải {len(df)} frames từ {csv_path}")
     return df
 
 
 def compute_speed(row) -> float:
-    """Tốc độ km/h từ vx, vy, vz."""
+    """Tốc độ km/h nội suy từ vị trí theo thời gian."""
     return math.sqrt(row.vx**2 + row.vy**2 + row.vz**2) * 3.6
 
 
@@ -67,6 +75,12 @@ def draw_hud(frame: np.ndarray, row: pd.Series,
              frame_idx: int, total: int) -> np.ndarray:
     """Vẽ bảng thông số xe lên góc phải dưới của frame."""
     h, w = frame.shape[:2]
+    roll_rad = math.radians(row.roll)
+    pitch_rad = math.radians(row.pitch)
+    yaw_rad = math.radians(row.yaw)
+    roll_rate_rad = math.radians(row.rollRate)
+    pitch_rate_rad = math.radians(row.pitchRate)
+    yaw_rate_rad = math.radians(row.yawRate)
 
     # Vị trí góc trên-trái của HUD
     hud_x = w - HUD_W - HUD_MARGIN
@@ -99,31 +113,31 @@ def draw_hud(frame: np.ndarray, row: pd.Series,
              (hud_x + HUD_W - 8, hud_y + 28),
              HUD_SEP_CLR, 1)
 
-    # ── Nhóm thông số (Đã tích hợp dữ liệu điều khiển) ─────────────────────
+    # ── Nhóm thông số (Đã tích hợp dữ liệu mới) ───────────────────────────
     groups = [
-        ("POSITION",  [("X", f"{row.x:+10.4f}", "m"),
-                       ("Y", f"{row.y:+10.4f}", "m"),
-                       ("Z", f"{row.z:+10.4f}", "m")]),
-        ("ROTATION",  [("Roll",  f"{row.roll:+10.4f}",  "°"),
-                       ("Pitch", f"{row.pitch:+10.4f}", "°"),
-                       ("Yaw",   f"{row.yaw:+10.4f}",   "°")]),
-        ("VELOCITY",  [("Vx", f"{row.vx:+10.4f}", "m/s"),
-                       ("Vy", f"{row.vy:+10.4f}", "m/s"),
-                       ("Vz", f"{row.vz:+10.4f}", "m/s")]),
-        ("ACCEL IMU", [("Ax", f"{row.ax:+10.4f}", "m/s²"),
-                       ("Ay", f"{row.ay:+10.4f}", "m/s²"),
-                       ("Az", f"{row.az:+10.4f}", "m/s²")]),
-        ("CONTROL",   [("Throttle", f"{row.throttle:10.4f}", ""),
-                       ("Brake",    f"{row.brake:10.4f}", ""),
-                       ("Steer",    f"{row.steer:+10.4f}", ""),
-                       ("Gear",     f"{int(row.gear):>10}", "")])
+        ("POSITION",    [("X", f"{row.x:+10.4f}", "m"),
+                         ("Y", f"{row.y:+10.4f}", "m"),
+                         ("Z", f"{row.z:+10.4f}", "m")]),
+        ("ROTATION",    [("Roll",  f"{roll_rad:+10.4f}",  "rad"),
+                         ("Pitch", f"{pitch_rad:+10.4f}", "rad"),
+                         ("Yaw",   f"{yaw_rad:+10.4f}",   "rad")]),
+        ("ANGULAR VEL", [("Roll R.",  f"{roll_rate_rad:+10.4f}", "rad/s"),
+                         ("Pitch R.", f"{pitch_rate_rad:+10.4f}", "rad/s"),
+                         ("Yaw R.",   f"{yaw_rate_rad:+10.4f}",   "rad/s")]),
+        ("ACCEL IMU",   [("Ax", f"{row.ax:+10.4f}", "m/s²"),
+                         ("Ay", f"{row.ay:+10.4f}", "m/s²"),
+                         ("Az", f"{row.az:+10.4f}", "m/s²")]),
+        ("CONTROL",     [("Throttle", f"{row.throttle:10.4f}", ""),
+                         ("Brake",    f"{row.brake:10.4f}", ""),
+                         ("Steer",    f"{row.steer:+10.4f}", ""),
+                         ("Gear",     f"{int(row.gear):>10}", "")])
     ]
 
     LINE_H    = 17          # pixel mỗi dòng
     GRP_PAD   = 6           # padding trên mỗi nhóm
     COL_LBL   = hud_x + 12
-    COL_VAL   = hud_x + 100
-    COL_UNIT  = hud_x + 222
+    COL_VAL   = hud_x + 110 # Dịch nhẹ sang phải để chứa nhãn dài
+    COL_UNIT  = hud_x + 232 # Dịch nhẹ sang phải
 
     cur_y = hud_y + 45
 
@@ -171,7 +185,8 @@ def draw_hud(frame: np.ndarray, row: pd.Series,
 
 # ─────────────────────────── Watermark timestamp ──────────────────────────────
 def draw_timestamp(frame: np.ndarray, row: pd.Series) -> np.ndarray:
-    txt = f"t = {row.timestamp:.3f} s   Frame {int(row.frame_id):06d}"
+    # [CẬP NHẬT] Đổi row.timestamp thành row.time
+    txt = f"t = {row.time:.3f} s   Frame {int(row.frame_id):06d}"
     cv2.putText(frame, txt, (14, 28),
                 FONT_SM, 0.52, (0, 0, 0), 3, cv2.LINE_AA)
     cv2.putText(frame, txt, (14, 28),

@@ -1,98 +1,206 @@
-# 🚗 CARLA Data Collector & Replay
+# CARLA Data Collector & Replay
 
-Bộ công cụ thu thập dữ liệu tự động và thủ công cho [CARLA Simulator](https://carla.org/), đi kèm với tiện ích tạo video replay trực quan.
+Bộ công cụ này dùng để:
 
-Bộ công cụ gồm 2 module chính:
-1. `carla_capture.py`: Điều khiển xe (thủ công hoặc Autopilot) và ghi lại dữ liệu cảm biến (Hình ảnh camera, Vận tốc, IMU, Góc lái, Chân ga, Phanh,...).
-2. `carla_replay.py`: Đọc dữ liệu đã lưu và render ra video `.mp4` có chèn bảng thông số (HUD) hiển thị trạng thái xe.
+1. Thu thập dữ liệu chạy xe trong [CARLA Simulator](https://carla.org/) bằng tay, Autopilot hoặc kịch bản CSV.
+2. Replay lại session đã lưu thành video `.mp4` với HUD hiển thị trạng thái xe.
 
----
+Hai script chính:
 
-## 📋 Yêu cầu hệ thống
-
-- Đã cài đặt và đang chạy **CARLA Simulator** (thường ở port `2000`).
-- **Python:** 3.7 trở lên.
-
-## 🛠 Cài đặt
-
-Mở terminal hoặc command prompt và chạy lệnh sau để cài đặt các thư viện Python cần thiết:
-
-    pip install carla pygame opencv-python numpy pandas
-
-> **Lưu ý:** Phiên bản thư viện `carla` cài đặt qua pip cần tương thích với phiên bản CARLA Simulator bạn đang sử dụng.
+1. `carla_capture.py`: spawn xe, hiển thị camera live, ghi ảnh + dữ liệu pose/IMU/control.
+2. `carla_replay.py`: đọc `data.csv` và `images/`, dựng video replay có HUD và timestamp.
 
 ---
 
-## 🚀 Hướng dẫn sử dụng
+## Yêu cầu hệ thống
 
-### 1. Chạy Carla Server 
+- CARLA Simulator đang chạy, mặc định tại `localhost:2000`.
+- Python 3.7+.
+- Gói Python cần thiết:
 
-    cd Carla_folder && ./CarlaUE4.sh -prefernvidia
+```bash
+pip install carla pygame opencv-python numpy pandas
+```
 
-### 2. Thu thập dữ liệu (`carla_capture.py`)
+Lưu ý: phiên bản `carla` cài qua `pip` phải tương thích với bản CARLA server đang dùng.
 
-Chắc chắn rằng CARLA server đang chạy, sau đó mở một terminal mới khởi chạy script thu thập dữ liệu:
+---
 
-    python3 carla_capture.py
+## Chạy CARLA server
 
-#### 📌 Các tham số tùy chọn (Arguments)
+```bash
+cd Carla_folder
+./CarlaUE4.sh -prefernvidia
+```
 
-| Tham số | Ví dụ | Mô tả |
+---
+
+## Thu thập dữ liệu với `carla_capture.py`
+
+Script hỗ trợ 3 chế độ:
+
+1. `MANUAL`: lái bằng bàn phím.
+2. `AUTOPILOT`: bật autopilot ngay từ đầu bằng `-a`.
+3. `SCRIPT`: chạy tự động theo file kịch bản CSV bằng `--script`; chế độ này tự bắt đầu ghi ngay khi khởi chạy.
+
+Ngoài việc spawn xe theo `--filter`, script hiện sẽ ưu tiên tìm một đoạn đường thẳng dài, căn xe vào giữa làn rồi mới bắt đầu ghi.
+
+### Cú pháp cơ bản
+
+```bash
+python3 carla_capture.py
+```
+
+### Tham số dòng lệnh
+
+| Tham số | Mặc định | Mô tả |
 | :--- | :--- | :--- |
-| `--map` | `--map Town04` | Chọn bản đồ để tải (VD: `Town01`, `Town02`). Bỏ qua nếu muốn dùng map hiện tại. |
-| `--filter` | `--filter vehicle.tesla.model3` | Lọc và chọn loại xe muốn spawn. |
-| `--weather` | `--weather ClearNoon` | Chọn thời tiết (VD: `ClearNoon`, `HardRainSunset`, `WetCloudyNoon`). |
-| `--res` | `--res 1920x1080` | Độ phân giải cửa sổ hiển thị và ảnh thu thập (Mặc định: `1280x720`). |
-| `-a`, `--autopilot` | `-a` | Bật chế độ lái tự động (Autopilot) ngay khi khởi chạy. |
-| `--sync` | `--sync` | Bật chế độ Synchronous mode, giúp ghi data ổn định, không bị rớt frame. |
+| `--host` | `localhost` | Địa chỉ CARLA server. |
+| `-p`, `--port` | `2000` | Port CARLA server. |
+| `--res` | `1280x720` | Độ phân giải cửa sổ và ảnh camera. |
+| `--filter` | `vehicle.tesla.model3` | Filter blueprint xe để spawn. |
+| `--map` | `Town04` | Map sẽ được load khi khởi chạy. |
+| `--weather` | `ClearNoon` | Preset thời tiết của CARLA. |
+| `-a`, `--autopilot` | `False` | Bật autopilot từ đầu. |
+| `--sync` | `False` | Bật synchronous mode. |
+| `--hz` | `100` | Tần số tick/ghi khi dùng sync mode hoặc game loop. |
+| `--script` | `None` | Đường dẫn tới file kịch bản CSV để chạy chế độ script. |
 
-**Ví dụ chạy với đầy đủ tham số:**
+### Ví dụ
 
-    python3 carla_capture.py --map Town04 --filter vehicle.audi.etron --weather HardRainSunset --res 1920x1080 --sync
+Chạy manual/autopilot:
 
-#### ⌨️ Phím tắt điều khiển
+```bash
+python3 carla_capture.py --map Town04 --filter vehicle.audi.etron --weather HardRainSunset --res 1920x1080 --sync --hz 100
+```
 
-| Phím | Chức năng | Phím | Chức năng |
-| :--- | :--- | :--- | :--- |
-| `W / A / S / D` | Ga, Phanh, Lái Trái, Lái Phải | `F5` | **▶ BẮT ĐẦU** ghi dữ liệu |
-| `Q` | Chuyển số Tiến / Lùi | `F6` | **⏸ TẠM DỪNG** ghi |
-| `Space` | Phanh tay | `F7` | **▶ TIẾP TỤC** ghi |
-| `P` | Bật/Tắt Autopilot | `F8` | **⏹ KẾT THÚC** & Lưu dữ liệu |
-| `M` | Đổi hộp số Tay / Tự động | `TAB` | Đổi góc nhìn Camera |
-| `, / .` | Giảm / Tăng số (hộp số tay) | `ESC` | Thoát chương trình |
+Chạy theo kịch bản:
+
+```bash
+python3 carla_capture.py --script scenario.csv --sync --hz 100
+```
+
+### Phím điều khiển
+
+#### Manual / Autopilot
+
+| Phím | Chức năng |
+| :--- | :--- |
+| `W / Up` | Ga |
+| `S / Down` | Phanh |
+| `A / Left` | Lái trái |
+| `D / Right` | Lái phải |
+| `Q` | Đảo chiều tiến/lùi |
+| `Space` | Phanh tay |
+| `P` | Bật/tắt Autopilot |
+| `M` | Chuyển hộp số tay/tự động |
+| `, / .` | Giảm / tăng số khi ở hộp số tay |
+| `F5` | Bắt đầu ghi |
+| `F6` | Tạm dừng ghi |
+| `F7` | Tiếp tục ghi |
+| `F8` | Dừng và lưu |
+| `TAB` | Đổi góc camera |
+| `ESC` hoặc `Ctrl+Q` | Thoát |
+
+#### Script mode
+
+- Khi dùng `--script`, script sẽ tự tạo session và tự bắt đầu ghi.
+- Có thể dùng `F6` để tạm dừng, `F7` để tiếp tục, `F8` để dừng sớm.
+- Khi kịch bản chạy xong, chương trình tự lưu dữ liệu và tự thoát.
+
+### Định dạng file kịch bản `scenario.csv`
+
+`carla_capture.py` đọc file CSV với các cột:
+
+| Cột | Ý nghĩa |
+| :--- | :--- |
+| `t_start` | Thời điểm bắt đầu phase (giây) |
+| `t_end` | Thời điểm kết thúc phase (giây) |
+| `target_speed_kmh` | Tốc độ mục tiêu |
+| `steer_deg` | Góc lái mục tiêu theo độ |
+| `zigzag_period` | Chu kỳ đổi dấu góc lái; `0` nếu không zigzag |
+
+Ví dụ:
+
+```csv
+t_start,t_end,target_speed_kmh,steer_deg,zigzag_period
+0,8,20,0,0
+8,10,20,-10,0
+10,12,30,10,0
+```
+
+Script mode hiện dùng bộ điều khiển PID để bám tốc độ mục tiêu, và chuẩn hóa góc lái theo giới hạn `45` độ.
 
 ---
 
-### 3. Tạo video Replay (`carla_replay.py`)
+## Tạo video replay với `carla_replay.py`
 
-Sau khi thu thập dữ liệu, sử dụng script này để render ra một video chứa hình ảnh từ camera và bảng HUD thông số xe. Quá trình render chạy ngầm và hiển thị thanh tiến trình trên terminal.
+Script replay đọc session đã lưu, chèn HUD vào từng frame rồi ghi ra video `.mp4`.
 
-**Cú pháp cơ bản:**
+HUD hiện hiển thị:
 
-    python3 carla_replay.py --data_dir <đường_dẫn_tới_thư_mục_session>
+- Position: `x`, `y`, `z`
+- Rotation: `roll`, `pitch`, `yaw` (hiển thị trên HUD dưới đơn vị `rad`)
+- Angular velocity: `rollRate`, `pitchRate`, `yawRate` (hiển thị trên HUD dưới đơn vị `rad/s`)
+- IMU acceleration: `ax`, `ay`, `az`
+- Control: `throttle`, `brake`, `steer`, `gear`
 
-#### 📌 Các tham số tùy chọn (Arguments)
+### Cú pháp
+
+```bash
+python3 carla_replay.py --data_dir data/session_YYYYMMDD_HHMMSS
+```
+
+### Tham số dòng lệnh
 
 | Tham số | Bắt buộc | Mặc định | Mô tả |
 | :--- | :---: | :--- | :--- |
-| `--data_dir` | **Có** | - | Đường dẫn tới thư mục chứa file `data.csv` và thư mục `images/`. |
-| `--output` | Không | `replay.mp4` | Tên/Đường dẫn file video đầu ra. |
-| `--fps` | Không | `30.0` | Tốc độ khung hình (Frame rate) của video. |
+| `--data_dir` | Có | - | Thư mục session chứa `data.csv` và `images/`. |
+| `--output` | Không | `replay.mp4` | File video đầu ra. |
+| `--fps` | Không | `30.0` | FPS của video replay. |
 
-**Ví dụ:**
+### Ví dụ
 
-    python3 carla_replay.py --data_dir data/session_20260331_143137 --output my_replay.mp4 --fps 30
+```bash
+python3 carla_replay.py --data_dir data/session_20260401_101048 --output replay.mp4 --fps 30
+```
 
 ---
 
-## 📂 Cấu trúc thư mục dữ liệu đầu ra
+## Cấu trúc dữ liệu đầu ra
 
-Sau khi bấm `F8` để lưu dữ liệu trong `carla_capture.py`, hệ thống sẽ tự động tạo thư mục theo cấu trúc thời gian như sau:
+Mỗi lần bắt đầu ghi, script tạo một thư mục session dạng:
 
-    data/
-    └── session_YYYYMMDD_HHMMSS/
-        ├── images/                 # Thư mục chứa các frame ảnh (.png)
-        │   ├── frame_000001.png
-        │   ├── frame_000002.png
-        │   └── ...
-        └── data.csv                # File chứa log thông số (vận tốc, góc lái, ga, phanh,...)
+```text
+data/
+└── session_YYYYMMDD_HHMMSS/
+    ├── images/
+    │   ├── frame_000001.png
+    │   ├── frame_000002.png
+    │   └── ...
+    └── data.csv
+```
+
+### Schema `data.csv`
+
+File CSV hiện có các cột:
+
+```text
+frame_id,time,image_file,
+x,y,z,
+roll,pitch,yaw,
+rollRate,pitchRate,yawRate,
+ax,ay,az,
+throttle,brake,steer,gear
+```
+
+Ý nghĩa:
+
+- `frame_id`: số thứ tự frame đã ghi.
+- `time`: thời gian mô phỏng tính từ lúc bắt đầu ghi.
+- `image_file`: tên file ảnh tương ứng trong `images/`.
+- `x, y, z`: vị trí xe.
+- `roll, pitch, yaw`: góc quay xe.
+- `rollRate, pitchRate, yawRate`: vận tốc góc lấy từ `vehicle.get_angular_velocity()`.
+- `ax, ay, az`: gia tốc từ IMU gắn gần vị trí đầu người lái.
+- `throttle, brake, steer, gear`: lệnh điều khiển xe tại thời điểm ghi.

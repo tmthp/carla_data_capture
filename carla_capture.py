@@ -83,7 +83,8 @@ OUTPUT_ROOT   = "data"
 IMAGES_DIR    = "images"
 CSV_FILENAME  = "data.csv"
 
-# rollRate, pitchRate, yawRate = angular velocity (deg/s) từ vehicle.get_angular_velocity()
+# roll, pitch, yaw lấy từ transform của actor IMU.
+# rollRate, pitchRate, yawRate lấy từ gyroscope của IMU.
 CSV_HEADER = [
     "frame_id", "time", "image_file",
     "x", "y", "z",
@@ -116,20 +117,20 @@ class DataWriter:
         self._writer.writeheader()
         self.saved_count = 0
 
-    def write(self, frame_id, time_elapsed, img_bgr, imu, transform, angular_velocity, control):
+    def write(self, frame_id, time_elapsed, img_bgr, imu, transform, control):
         img_name = f"frame_{frame_id:06d}.png"
         cv2.imwrite(os.path.join(self.images_path, img_name), img_bgr)
-        loc, rot = transform.location, transform.rotation
+        loc = transform.location
         self._writer.writerow({
             "frame_id":   frame_id,
             "time":       f"{time_elapsed:.6f}",
             "image_file": img_name,
             "x":        f"{loc.x:.6f}", "y": f"{loc.y:.6f}", "z": f"{loc.z:.6f}",
-            "roll":     f"{rot.roll:.6f}", "pitch": f"{rot.pitch:.6f}",
-            "yaw":      f"{rot.yaw:.6f}",
-            "rollRate":  f"{angular_velocity.x:.6f}",
-            "pitchRate": f"{angular_velocity.y:.6f}",
-            "yawRate":   f"{angular_velocity.z:.6f}",
+            "roll":     f"{imu['roll']:.6f}", "pitch": f"{imu['pitch']:.6f}",
+            "yaw":      f"{imu['yaw']:.6f}",
+            "rollRate":  f"{imu['rollRate']:.6f}",
+            "pitchRate": f"{imu['pitchRate']:.6f}",
+            "yawRate":   f"{imu['yawRate']:.6f}",
             "ax":    f"{imu['ax']:.6f}", "ay": f"{imu['ay']:.6f}",
             "az":    f"{imu['az']:.6f}",
             "throttle": f"{control.throttle:.6f}",
@@ -150,6 +151,8 @@ class DataWriter:
 class IMUSensor:
     def __init__(self, parent_actor):
         self._lock  = threading.Lock()
+        self.roll = self.pitch = self.yaw = 0.0
+        self.roll_rate = self.pitch_rate = self.yaw_rate = 0.0
         self.ax = self.ay = self.az = 0.0
         world      = parent_actor.get_world()
         bp         = world.get_blueprint_library().find("sensor.other.imu")
@@ -166,6 +169,13 @@ class IMUSensor:
         self = weak_self()
         if not self: return
         with self._lock:
+            rot = data.transform.rotation
+            self.roll, self.pitch, self.yaw = rot.roll, rot.pitch, rot.yaw
+            self.roll_rate, self.pitch_rate, self.yaw_rate = (
+                data.gyroscope.x,
+                data.gyroscope.y,
+                data.gyroscope.z,
+            )
             self.ax, self.ay, self.az = (
                 data.accelerometer.x,
                 data.accelerometer.y,
@@ -174,7 +184,17 @@ class IMUSensor:
 
     def get(self):
         with self._lock:
-            return {"ax": self.ax, "ay": self.ay, "az": self.az}
+            return {
+                "roll": self.roll,
+                "pitch": self.pitch,
+                "yaw": self.yaw,
+                "rollRate": self.roll_rate,
+                "pitchRate": self.pitch_rate,
+                "yawRate": self.yaw_rate,
+                "ax": self.ax,
+                "ay": self.ay,
+                "az": self.az,
+            }
 
     def destroy(self):
         if self.sensor:
@@ -463,10 +483,10 @@ class HUDOverlay:
         if self._notif_t > 0: self._notif_t -= dt_s
 
     def render(self, display, vehicle, imu_sensor, kb_ctrl, rec_state, frame_count, session_dir, weather_name, cam_name, elapsed_time=0.0, script_player=None):
-        tf, ang_vel, ctrl, imu, vel = vehicle.get_transform(), vehicle.get_angular_velocity(), kb_ctrl.control if script_player is None else script_player.control, imu_sensor.get(), vehicle.get_velocity()
+        tf, ctrl, imu, vel = vehicle.get_transform(), kb_ctrl.control if script_player is None else script_player.control, imu_sensor.get(), vehicle.get_velocity()
         spd = math.sqrt(vel.x**2 + vel.y**2 + vel.z**2) * 3.6
         self._draw_ctrl_panel(display, ctrl, kb_ctrl, spd, rec_state, frame_count, session_dir, weather_name, cam_name, elapsed_time, script_player)
-        self._draw_data_panel(display, tf.location, tf.rotation, ang_vel, imu)
+        self._draw_data_panel(display, tf.location, imu)
         self._draw_keybind_bar(display, script_player is not None)
         if self._notif_t > 0:
             alpha = min(255, int(255 * min(1.0, self._notif_t)))
@@ -504,12 +524,12 @@ class HUDOverlay:
             display.blit(self._fnt.render(row[2], True, row[3]), (PAD + 63, y))
             y += LH
 
-    def _draw_data_panel(self, display, loc, rot, ang_vel, imu):
+    def _draw_data_panel(self, display, loc, imu):
         PAD, LH = 10, 17
         groups = [
             ("POSITION", [("X", f"{loc.x:+9.3f} m"), ("Y", f"{loc.y:+9.3f} m"), ("Z", f"{loc.z:+9.3f} m")]),
-            ("ROTATION", [("Roll", f"{rot.roll:+8.2f} °"), ("Pitch", f"{rot.pitch:+8.2f} °"), ("Yaw", f"{rot.yaw:+8.2f} °")]),
-            ("ANGULAR RATE", [("rollRate", f"{ang_vel.x:+7.2f} °/s"), ("pitchRate", f"{ang_vel.y:+7.2f} °/s"), ("yawRate", f"{ang_vel.z:+7.2f} °/s")]),
+            ("ROTATION", [("Roll", f"{imu['roll']:+8.2f} °"), ("Pitch", f"{imu['pitch']:+8.2f} °"), ("Yaw", f"{imu['yaw']:+8.2f} °")]),
+            ("ANGULAR RATE", [("rollRate", f"{imu['rollRate']:+7.2f} °/s"), ("pitchRate", f"{imu['pitchRate']:+7.2f} °/s"), ("yawRate", f"{imu['yawRate']:+7.2f} °/s")]),
             ("ACCEL IMU", [("Ax", f"{imu['ax']:+7.3f} m/s²"), ("Ay", f"{imu['ay']:+7.3f} m/s²"), ("Az", f"{imu['az']:+7.3f} m/s²")])
         ]
         pw, ph = 260, (sum(1 + len(g[1]) for g in groups) + len(groups) - 1) * LH + PAD * 2 + 4
@@ -740,7 +760,7 @@ def game_loop(args):
                     frame_id    += 1
                     frame_count += 1
                     if writer:
-                        writer.write(frame_id, elapsed_time, bgr, imu.get(), vehicle.get_transform(), vehicle.get_angular_velocity(), vehicle.get_control())
+                        writer.write(frame_id, elapsed_time, bgr, imu.get(), vehicle.get_transform(), vehicle.get_control())
 
             camera.render(display)
             hud.tick(dt_s)
